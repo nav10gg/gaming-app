@@ -27,7 +27,7 @@ def load_data():
         client = gspread.authorize(creds)
         
         # Open the specific sheet
-        sheet = client.open("My Squad Tracker").sheet1 
+        sheet = client.open("My Squad Tracker").worksheet("Ranked Resurgence") 
         
         # INSTEAD of sheet.get_all_records(), we use get_all_values()
         raw_data = sheet.get_all_values()
