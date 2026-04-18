@@ -27,7 +27,7 @@ def load_data():
         client = gspread.authorize(creds)
         
         # Open the specific sheet (Swap this name if needed!)
-        sheet = client.open("My Squad Tracker").sheet1 
+        sheet = client.open("My Squad Tracker").Ranked Resurgence 
         
         # Pull all the data into a Pandas DataFrame
         data = sheet.get_all_records()
