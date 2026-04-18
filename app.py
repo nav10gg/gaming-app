@@ -26,15 +26,22 @@ def load_data():
         creds = Credentials.from_service_account_info(creds_json, scopes=scopes)
         client = gspread.authorize(creds)
         
-        # Open the specific sheet (Swap this name if needed!)
-        sheet = client.open("My Squad Tracker").Ranked Resurgence 
+        # Open the specific sheet
+        sheet = client.open("My Squad Tracker").sheet1 
         
-        # Pull all the data into a Pandas DataFrame
-        data = sheet.get_all_records()
-        return pd.DataFrame(data)
-    except Exception as e:
-        st.error(f"Failed to connect to Google Sheets: {e}")
-        return pd.DataFrame() # Return empty table if it fails
+        # INSTEAD of sheet.get_all_records(), we use get_all_values()
+        raw_data = sheet.get_all_values()
+        
+        if not raw_data:
+             return pd.DataFrame()
+             
+        # Tell Pandas to use the first row as headers, and the rest as data
+        df = pd.DataFrame(raw_data[1:], columns=raw_data[0])
+        
+        # Optional: drop columns that have an empty string as a header
+        df = df.loc[:, df.columns != '']
+        
+        return df
 
 # Load the real data
 df = load_data()
