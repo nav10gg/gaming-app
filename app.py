@@ -50,6 +50,24 @@ def load_data():
 
 # Load the real data
 df = load_data()
+# Tell Pandas to use the first row as headers, and the rest as data
+        df = pd.DataFrame(raw_data[1:], columns=raw_data[0])
+        
+        # --- THE NEW PART ---
+        # List the EXACT names of the columns you want to show in the app
+        # Make sure they match your Google Sheet headers perfectly (case-sensitive!)
+        columns_to_keep = ["Total Score", "P1 Name", "P1 Kills", "P2 Name", "P2 Kills", "P3 Name", "P3 Kills", "P4 Names", "P4 Kills"] 
+        
+        # This safety check ensures the app doesn't crash if a column name is misspelled
+        safe_columns = [col for col in columns_to_keep if col in df.columns]
+        
+        # Slice the dataframe down to just those specific columns
+        df = df[safe_columns]
+        # --------------------
+        
+        return df
+
+    except Exception as e:
 
 # 4. Display the Data (Only if we successfully loaded it)
 if not df.empty:
