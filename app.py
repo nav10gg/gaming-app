@@ -43,6 +43,11 @@ def load_data():
         
         return df
 
+    except Exception as e:
+        # This catches any errors and prevents the app from crashing
+        st.error(f"Failed to connect to Google Sheets: {e}")
+        return pd.DataFrame()
+
 # Load the real data
 df = load_data()
 
