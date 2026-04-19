@@ -41,7 +41,7 @@ def load_data():
         columns_to_keep = [
             "Total Score", "P1 Name", "P1 Kills", 
             "P2 Name", "P2 Kills", "P3 Name", 
-            "P3 Kills", "P4 Names", "P4 Kills"
+            "P3 Kills", "P4 Name", "P4 Kills"
         ] 
         
         # This safety check ensures the app doesn't crash if a column name is misspelled
