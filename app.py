@@ -123,10 +123,11 @@ if 'ticket_number' not in st.session_state:
                 except ValueError:
                     pass # Ignore blanks or text
                     
-            # Set the ticket to the highest number + 1 (Start at 100 if completely empty)
-            st.session_state.ticket_number = max(ticket_nums) + 1 if ticket_nums else 100
-        else:
-            st.session_state.ticket_number = 100
+            # Generate a Hybrid Ticket: Consecutive Number + 3 Random Letters
+            import uuid
+            next_num = max(ticket_nums) + 1 if ticket_nums else 100
+            random_suffix = str(uuid.uuid4())[:3].upper()
+            st.session_state.ticket_number = f"{next_num}-{random_suffix}"
             
     except Exception as e:
         st.session_state.ticket_number = 999 # Fallback if something goes wrong
