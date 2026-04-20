@@ -227,8 +227,18 @@ elif page == "📝 Submit Match":
         submit_button = st.form_submit_button("Log Match")
         
         if submit_button:
+            # --- INPUT VALIDATION (NO DUPLICATES) ---
+            selected_players = [p1_name, p2_name]
+            if is_quads:
+                selected_players.extend([p3_name, p4_name])
+            
+            # Remove blanks from the list
+            active_players = [p for p in selected_players if p != ""]
+            
             if not p1_name:
                 st.error("You must select at least Player 1.")
+            elif len(active_players) != len(set(active_players)):
+                st.error("Duplicate players detected! You can't put the same person in two slots.")
             else:
                 p1_id = roster_dict.get(p1_name, p1_name)
                 p2_id = roster_dict.get(p2_name, p2_name) if p2_name else ""
@@ -238,33 +248,68 @@ elif page == "📝 Submit Match":
                 image_url = ""
                 if uploaded_file:
                     discord_msg = f"**📝 NEW MATCH LOGGED**\n**Mode:** {selected_mode}\n**Ticket:** {st.session_state.ticket_number}\n**Game:** {game_num}\n**Placement:** {placement}\n**Submitted By:** {p1_name}"
-                    image_url = upload_to_discord(uploaded_file.getvalue(), uploaded_file.name, discord_msg)
+                    with st.spinner("Uploading screenshot to Discord..."):
+                        image_url = upload_to_discord(uploaded_file.getvalue(), uploaded_file.name, discord_msg)
                     
                 target_sheet = spreadsheet.worksheet(raw_target_tab)
                 headers = target_sheet.row_values(1)
-                new_row = [""] * len(headers) 
                 
-                def safe_insert(col_name, value):
-                    if col_name in headers:
-                        new_row[headers.index(col_name)] = value
-                        
-                safe_insert("Ticket Number", st.session_state.ticket_number)
-                safe_insert(f"G{game_num} Placement", placement)
-                safe_insert(f"G{game_num} P1 Name", p1_id)
-                safe_insert(f"G{game_num} P1 Kills", p1_kills)
-                safe_insert(f"G{game_num} P2 Name", p2_id)
-                safe_insert(f"G{game_num} P2 Kills", p2_kills)
+                # Create a dictionary of the new data we want to insert
+                new_game_data = {
+                    "Ticket Number": st.session_state.ticket_number,
+                    f"G{game_num} Placement": placement,
+                    f"G{game_num} P1 Name": p1_id,
+                    f"G{game_num} P1 Kills": p1_kills,
+                    f"G{game_num} P2 Name": p2_id,
+                    f"G{game_num} P2 Kills": p2_kills,
+                    "Screenshot Link": image_url if image_url else ""
+                }
+                
                 if is_quads:
-                    safe_insert(f"G{game_num} P3 Name", p3_id)
-                    safe_insert(f"G{game_num} P3 Kills", p3_kills)
-                    safe_insert(f"G{game_num} P4 Name", p4_id)
-                    safe_insert(f"G{game_num} P4 Kills", p4_kills)
-                
-                safe_insert("Screenshot Link", image_url if image_url else "No Image")
+                    new_game_data.update({
+                        f"G{game_num} P3 Name": p3_id,
+                        f"G{game_num} P3 Kills": p3_kills,
+                        f"G{game_num} P4 Name": p4_id,
+                        f"G{game_num} P4 Kills": p4_kills
+                    })
 
                 try:
-                    target_sheet.append_row(new_row)
+                    # --- THE "SPARSE ROW" FIX (UPDATE vs APPEND) ---
+                    ticket_col_index = headers.index("Ticket Number") + 1
+                    
+                    try:
+                        # Try to find the existing ticket in the sheet
+                        cell = target_sheet.find(st.session_state.ticket_number, in_column=ticket_col_index)
+                        row_num = cell.row
+                        
+                        # Grab the current row so we don't accidentally erase Game 1 when submitting Game 2
+                        current_row = target_sheet.row_values(row_num)
+                        
+                        # Pad the row with blanks if it's shorter than the header list
+                        current_row += [""] * (len(headers) - len(current_row))
+                        
+                        # Inject the new game data into the existing row
+                        for col_name, val in new_game_data.items():
+                            if col_name in headers and val != "":
+                                idx = headers.index(col_name)
+                                current_row[idx] = val
+                                
+                        # Blast the updated row back to Google Sheets in one single API call
+                        target_sheet.update(values=[current_row], range_name=f"A{row_num}")
+                        action_taken = "Updated"
+
+                    except Exception: 
+                        # If the ticket is NOT found, it's a new run. Append a brand new row.
+                        new_row = [""] * len(headers)
+                        for col_name, val in new_game_data.items():
+                            if col_name in headers:
+                                new_row[headers.index(col_name)] = val
+                        
+                        target_sheet.append_row(new_row)
+                        action_taken = "Logged"
+
                     st.cache_data.clear()
-                    st.success(f"✅ Game {game_num} (Ticket {st.session_state.ticket_number}) logged successfully! Image sent to Discord: {'Yes' if image_url else 'No'}")
+                    st.success(f"✅ Game {game_num} (Ticket {st.session_state.ticket_number}) {action_taken} successfully!")
+                    
                 except Exception as e:
                     st.error(f"Failed to submit match to sheet: {e}")
