@@ -5,6 +5,7 @@ from google.oauth2.service_account import Credentials
 import json
 import os
 import requests
+import uuid
 
 # 1. Setup for Mobile
 st.set_page_config(page_title="League Hub", layout="centered", initial_sidebar_state="collapsed")
@@ -98,7 +99,8 @@ player_names = [""] + list(roster_dict.keys())
 
 df = get_leaderboard(selected_mode)
 if not df.empty:
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    # UPDATED LINE BELOW (use_container_width is now width="stretch")
+    st.dataframe(df, width="stretch", hide_index=True)
 
 st.divider()
 
@@ -119,12 +121,11 @@ if 'ticket_number' not in st.session_state:
             ticket_nums = []
             for t in existing_tickets:
                 try:
-                    ticket_nums.append(int(t))
+                    ticket_nums.append(int(str(t).split('-')[0])) # Grab just the number part
                 except ValueError:
                     pass # Ignore blanks or text
                     
             # Generate a Hybrid Ticket: Consecutive Number + 3 Random Letters
-            import uuid
             next_num = max(ticket_nums) + 1 if ticket_nums else 100
             random_suffix = str(uuid.uuid4())[:3].upper()
             st.session_state.ticket_number = f"{next_num}-{random_suffix}"
