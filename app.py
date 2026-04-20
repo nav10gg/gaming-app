@@ -10,11 +10,13 @@ import uuid
 # 1. Setup for Mobile
 st.set_page_config(page_title="League Hub", layout="centered", initial_sidebar_state="collapsed")
 
-# 2. The Sassy Greeting (Now with Main Logo)
+# 2. The Sassy Greeting (Now Bulletproof)
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
-    # IMPORTANT: Upload a file named "main_logo.png" to GitHub, or this will show a broken image icon
-    st.image("main_logo.png", use_container_width=True) 
+    if os.path.exists("main_logo.png"):
+        st.image("main_logo.png", width="stretch")
+    else:
+        st.markdown("<h1 style='text-align: center;'>🏆 League Hub</h1>", unsafe_allow_html=True)
 
 st.info("*Oh, look who decided to check their stats. Still 4th place? Groundbreaking.* — **Unpaid Intern**")
 
@@ -175,17 +177,22 @@ if page == "🏆 Leaderboard":
         with st.container(border=True):
             logo_col, text_col = st.columns([1, 3], vertical_alignment="center")
             with logo_col:
-                st.image("first_place.png", width=60) # Upload first_place.png to GitHub
+                if os.path.exists("first_place.png"):
+                    st.image("first_place.png", width=60)
+                else:
+                    st.markdown("## 🥇")
             with text_col:
                 st.markdown("### 1st Place")
                 st.markdown(f"**{top_squads[0]}**")
-            # 1st Place gets the money badge!
             st.success(f"🏆 {top_scores[0]} pts  |  💰 Takes ${pot_total:,.2f}") 
 
         with st.container(border=True):
             logo_col, text_col = st.columns([1, 3], vertical_alignment="center")
             with logo_col:
-                st.image("second_place.png", width=50) # Upload second_place.png to GitHub
+                if os.path.exists("second_place.png"):
+                    st.image("second_place.png", width=50)
+                else:
+                    st.markdown("## 🥈")
             with text_col:
                 st.markdown("#### 2nd Place")
                 st.markdown(f"**{top_squads[1]}**")
@@ -194,7 +201,10 @@ if page == "🏆 Leaderboard":
         with st.container(border=True):
             logo_col, text_col = st.columns([1, 3], vertical_alignment="center")
             with logo_col:
-                st.image("third_place.png", width=50) # Upload third_place.png to GitHub
+                if os.path.exists("third_place.png"):
+                    st.image("third_place.png", width=50)
+                else:
+                    st.markdown("## 🥉")
             with text_col:
                 st.markdown("#### 3rd Place")
                 st.markdown(f"**{top_squads[2]}**")
