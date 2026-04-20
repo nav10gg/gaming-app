@@ -141,25 +141,26 @@ if not df.empty:
     if len(df) > 3:
         # Slice the dataframe to only show 4th place and below
         contenders_df = df.iloc[3:].copy()
-        display_df = contenders_df[["Squad", "Total Score"]]
         
-        # Find the highest overall score so the progress bars scale correctly
-        max_score = df["Total Score"].max()
-        
-        st.dataframe(
-            display_df,
-            width="stretch",
-            hide_index=True,
-            column_config={
-                "Squad": st.column_config.TextColumn("Squad Roster", width="large"), # Forces wider column
-                "Total Score": st.column_config.ProgressColumn(
-                    "Score",
-                    format="%f",
-                    min_value=0,
-                    max_value=int(max_score) if pd.notna(max_score) else 5000,
-                ),
-            }
-        )
+        # Find the highest overall score so the progress bars scale correctly against 1st place
+        max_score = float(df["Total Score"].max())
+        if pd.isna(max_score) or max_score <= 0:
+            max_score = 1.0 # Safety fallback to prevent dividing by zero
+            
+        # Create a scrollable container so the app doesn't become infinitely long
+        with st.container(height=500, border=True):
+            for index, row in contenders_df.iterrows():
+                squad = row['Squad']
+                score = float(row['Total Score']) if pd.notna(row['Total Score']) else 0.0
+                
+                # Calculate the percentage for the progress bar (0.0 to 1.0)
+                progress_pct = min(score / max_score, 1.0) if score > 0 else 0.0
+                
+                # Layout: Name on top, full-width progress bar underneath
+                st.markdown(f"**{squad}**")
+                st.progress(progress_pct, text=f"{score} pts")
+                st.write("") # Adds a tiny bit of breathing room between teams
+                
     else:
         st.info("Not enough teams to fill the Contenders bracket yet. Log some matches!")
 
