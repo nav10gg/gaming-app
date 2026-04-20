@@ -13,7 +13,6 @@ st.set_page_config(page_title="League Hub", layout="centered", initial_sidebar_s
 # 2. The Sassy Greeting
 st.title("🏆 League Hub")
 st.info("*Oh, look who decided to check their stats. Still 4th place? Groundbreaking.* — **Unpaid Intern**")
-st.divider()
 
 # --- THE GAME MODE DICTIONARY ---
 GAME_MODES = {
@@ -88,8 +87,15 @@ def upload_to_discord(file_bytes, filename, message):
         print(f"Webhook failed: {e}")
     return None
 
-# --- APP INTERFACE ---
+# ==========================================
+# --- APP INTERFACE & NAVIGATION ROUTING ---
+# ==========================================
 
+# The Navigation Bar
+page = st.radio("Navigation", ["🏆 Leaderboard", "📝 Submit Match"], horizontal=True, label_visibility="collapsed")
+st.divider()
+
+# The Global Mode Selector (Applies to whatever page you are on)
 selected_mode = st.selectbox("🎮 Select Game Mode", list(GAME_MODES.keys()))
 is_quads = GAME_MODES[selected_mode]["is_quads"]
 raw_target_tab = GAME_MODES[selected_mode]["raw_tab"]
@@ -97,175 +103,168 @@ raw_target_tab = GAME_MODES[selected_mode]["raw_tab"]
 roster_dict = get_roster()
 player_names = [""] + list(roster_dict.keys()) 
 
-df = get_leaderboard(selected_mode)
-
-if not df.empty:
-    # --- DATA PROCESSING FOR TEAMS ---
-    # Combine individual player names into a single "Squad" string
-    name_cols = [col for col in df.columns if "Name" in col]
-    df["Squad"] = df[name_cols].apply(lambda row: " • ".join([str(val) for val in row if pd.notna(val) and str(val).strip() != ""]), axis=1)
-    
-    top_squads = df["Squad"].tolist()
-    top_scores = df["Total Score"].tolist()
-    
-    # Pad the list in case there are fewer than 3 teams logged
-    while len(top_squads) < 3:
-        top_squads.append("TBD")
-        top_scores.append(0)
-
-    # --- THE PODIUM (MOBILE OPTIMIZED CARDS) ---
-    st.subheader("🏁 Top 3 Podium")
-    
-    # 1st Place Card
-    with st.container(border=True):
-        st.markdown("### 🥇 1st Place")
-        st.markdown(f"**{top_squads[0]}**")
-        st.success(f"🏆 {top_scores[0]} pts") # Green accent
-
-    # 2nd Place Card
-    with st.container(border=True):
-        st.markdown("#### 🥈 2nd Place")
-        st.markdown(f"**{top_squads[1]}**")
-        st.info(f"⚡ {top_scores[1]} pts") # Blue accent
-
-    # 3rd Place Card
-    with st.container(border=True):
-        st.markdown("#### 🥉 3rd Place")
-        st.markdown(f"**{top_squads[2]}**")
-        st.warning(f"🔥 {top_scores[2]} pts") # Orange/Bronze accent
-        
-    st.divider()
-
-    # --- THE CONTENDERS TABLE ---
-    st.subheader("📊 The Contenders")
-    if len(df) > 3:
-        # Slice the dataframe to only show 4th place and below
-        contenders_df = df.iloc[3:].copy()
-        
-        # Find the highest overall score so the progress bars scale correctly against 1st place
-        max_score = float(df["Total Score"].max())
-        if pd.isna(max_score) or max_score <= 0:
-            max_score = 1.0 # Safety fallback to prevent dividing by zero
-            
-        # Create a scrollable container so the app doesn't become infinitely long
-        with st.container(height=500, border=True):
-            for index, row in contenders_df.iterrows():
-                squad = row['Squad']
-                score = float(row['Total Score']) if pd.notna(row['Total Score']) else 0.0
-                
-                # Calculate the percentage for the progress bar (0.0 to 1.0)
-                progress_pct = min(score / max_score, 1.0) if score > 0 else 0.0
-                
-                # Layout: Name on top, full-width progress bar underneath
-                st.markdown(f"**{squad}**")
-                st.progress(progress_pct, text=f"{score} pts")
-                st.write("") # Adds a tiny bit of breathing room between teams
-                
-    else:
-        st.info("Not enough teams to fill the Contenders bracket yet. Log some matches!")
-
 st.divider()
 
-# --- CONSECUTIVE TICKET GENERATOR ---
-st.subheader(f"📝 Submit Match: {selected_mode}")
+# ==========================================
+# PAGE 1: THE LEADERBOARD
+# ==========================================
+if page == "🏆 Leaderboard":
+    df = get_leaderboard(selected_mode)
 
-if 'ticket_number' not in st.session_state:
-    try:
-        target_sheet = spreadsheet.worksheet(raw_target_tab)
-        headers = target_sheet.row_values(1)
+    if not df.empty:
+        # Combine individual player names into a single "Squad" string
+        name_cols = [col for col in df.columns if "Name" in col]
+        df["Squad"] = df[name_cols].apply(lambda row: " • ".join([str(val) for val in row if pd.notna(val) and str(val).strip() != ""]), axis=1)
         
-        if "Ticket Number" in headers:
-            col_index = headers.index("Ticket Number") + 1
-            existing_tickets = target_sheet.col_values(col_index)[1:] 
-            
-            ticket_nums = []
-            for t in existing_tickets:
-                try:
-                    ticket_nums.append(int(str(t).split('-')[0])) 
-                except ValueError:
-                    pass 
-                    
-            next_num = max(ticket_nums) + 1 if ticket_nums else 100
-            random_suffix = str(uuid.uuid4())[:3].upper()
-            st.session_state.ticket_number = f"{next_num}-{random_suffix}"
-            
-    except Exception as e:
-        st.session_state.ticket_number = 999 
-
-st.info(f"🎫 **Active Ticket Number:** {st.session_state.ticket_number}")
-
-if st.button("🔄 End Run & Start New Ticket"):
-    del st.session_state.ticket_number
-    st.rerun()
-
-# --- THE ACTION PORTAL ---
-with st.form("match_submission_form", clear_on_submit=True):
-    col_g1, col_g2 = st.columns(2)
-    with col_g1:
-        game_num = st.selectbox("Game Number", [1, 2, 3, 4, 5, 6])
-    with col_g2:
-        placement = st.number_input("Placement (e.g., 1 for 1st)", min_value=1, step=1)
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        p1_name = st.selectbox("Player 1", player_names)
-        p1_kills = st.number_input("P1 Kills", min_value=0, step=1)
-    with col2:
-        p2_name = st.selectbox("Player 2", player_names)
-        p2_kills = st.number_input("P2 Kills", min_value=0, step=1)
+        top_squads = df["Squad"].tolist()
+        top_scores = df["Total Score"].tolist()
         
-    if is_quads:
-        col3, col4 = st.columns(2)
-        with col3:
-            p3_name = st.selectbox("Player 3", player_names)
-            p3_kills = st.number_input("P3 Kills", min_value=0, step=1)
-        with col4:
-            p4_name = st.selectbox("Player 4", player_names)
-            p4_kills = st.number_input("P4 Kills", min_value=0, step=1)
-            
-    uploaded_file = st.file_uploader("📸 Upload Screenshot (Optional)", type=["png", "jpg", "jpeg"])
-            
-    submit_button = st.form_submit_button("Log Match")
-    
-    if submit_button:
-        if not p1_name:
-            st.error("You must select at least Player 1.")
-        else:
-            p1_id = roster_dict.get(p1_name, p1_name)
-            p2_id = roster_dict.get(p2_name, p2_name) if p2_name else ""
-            p3_id = roster_dict.get(p3_name, p3_name) if 'p3_name' in locals() and p3_name else ""
-            p4_id = roster_dict.get(p4_name, p4_name) if 'p4_name' in locals() and p4_name else ""
+        while len(top_squads) < 3:
+            top_squads.append("TBD")
+            top_scores.append(0)
 
-            image_url = ""
-            if uploaded_file:
-                discord_msg = f"**📝 NEW MATCH LOGGED**\n**Mode:** {selected_mode}\n**Ticket:** {st.session_state.ticket_number}\n**Game:** {game_num}\n**Placement:** {placement}\n**Submitted By:** {p1_name}"
-                image_url = upload_to_discord(uploaded_file.getvalue(), uploaded_file.name, discord_msg)
+        # --- THE PODIUM (MOBILE OPTIMIZED CARDS) ---
+        st.subheader("🏁 Top 3 Podium")
+        
+        with st.container(border=True):
+            st.markdown("### 🥇 1st Place")
+            st.markdown(f"**{top_squads[0]}**")
+            st.success(f"🏆 {top_scores[0]} pts") 
+
+        with st.container(border=True):
+            st.markdown("#### 🥈 2nd Place")
+            st.markdown(f"**{top_squads[1]}**")
+            st.info(f"⚡ {top_scores[1]} pts") 
+
+        with st.container(border=True):
+            st.markdown("#### 🥉 3rd Place")
+            st.markdown(f"**{top_squads[2]}**")
+            st.warning(f"🔥 {top_scores[2]} pts") 
+            
+        st.divider()
+
+        # --- THE CONTENDERS LEADERBOARD FEED ---
+        st.subheader("📊 The Contenders")
+        if len(df) > 3:
+            contenders_df = df.iloc[3:].copy()
+            max_score = float(df["Total Score"].max())
+            if pd.isna(max_score) or max_score <= 0:
+                max_score = 1.0 
                 
+            with st.container(height=500, border=True):
+                for index, row in contenders_df.iterrows():
+                    squad = row['Squad']
+                    score = float(row['Total Score']) if pd.notna(row['Total Score']) else 0.0
+                    progress_pct = min(score / max_score, 1.0) if score > 0 else 0.0
+                    
+                    st.markdown(f"**{squad}**")
+                    st.progress(progress_pct, text=f"{score} pts")
+                    st.write("") 
+        else:
+            st.info("Not enough teams to fill the Contenders bracket yet. Log some matches!")
+
+# ==========================================
+# PAGE 2: SUBMIT MATCH
+# ==========================================
+elif page == "📝 Submit Match":
+    st.subheader(f"📝 Submit Match: {selected_mode}")
+
+    if 'ticket_number' not in st.session_state:
+        try:
             target_sheet = spreadsheet.worksheet(raw_target_tab)
             headers = target_sheet.row_values(1)
-            new_row = [""] * len(headers) 
             
-            def safe_insert(col_name, value):
-                if col_name in headers:
-                    new_row[headers.index(col_name)] = value
-                    
-            safe_insert("Ticket Number", st.session_state.ticket_number)
-            safe_insert(f"G{game_num} Placement", placement)
-            safe_insert(f"G{game_num} P1 Name", p1_id)
-            safe_insert(f"G{game_num} P1 Kills", p1_kills)
-            safe_insert(f"G{game_num} P2 Name", p2_id)
-            safe_insert(f"G{game_num} P2 Kills", p2_kills)
-            if is_quads:
-                safe_insert(f"G{game_num} P3 Name", p3_id)
-                safe_insert(f"G{game_num} P3 Kills", p3_kills)
-                safe_insert(f"G{game_num} P4 Name", p4_id)
-                safe_insert(f"G{game_num} P4 Kills", p4_kills)
-            
-            safe_insert("Screenshot Link", image_url if image_url else "No Image")
+            if "Ticket Number" in headers:
+                col_index = headers.index("Ticket Number") + 1
+                existing_tickets = target_sheet.col_values(col_index)[1:] 
+                
+                ticket_nums = []
+                for t in existing_tickets:
+                    try:
+                        ticket_nums.append(int(str(t).split('-')[0])) 
+                    except ValueError:
+                        pass 
+                        
+                next_num = max(ticket_nums) + 1 if ticket_nums else 100
+                random_suffix = str(uuid.uuid4())[:3].upper()
+                st.session_state.ticket_number = f"{next_num}-{random_suffix}"
+                
+        except Exception as e:
+            st.session_state.ticket_number = 999 
 
-            try:
-                target_sheet.append_row(new_row)
-                st.cache_data.clear()
-                st.success(f"✅ Game {game_num} (Ticket {st.session_state.ticket_number}) logged successfully! Image sent to Discord: {'Yes' if image_url else 'No'}")
-            except Exception as e:
-                st.error(f"Failed to submit match to sheet: {e}")
+    st.info(f"🎫 **Active Ticket Number:** {st.session_state.ticket_number}")
+
+    if st.button("🔄 End Run & Start New Ticket"):
+        del st.session_state.ticket_number
+        st.rerun()
+
+    with st.form("match_submission_form", clear_on_submit=True):
+        col_g1, col_g2 = st.columns(2)
+        with col_g1:
+            game_num = st.selectbox("Game Number", [1, 2, 3, 4, 5, 6])
+        with col_g2:
+            placement = st.number_input("Placement (e.g., 1 for 1st)", min_value=1, step=1)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            p1_name = st.selectbox("Player 1", player_names)
+            p1_kills = st.number_input("P1 Kills", min_value=0, step=1)
+        with col2:
+            p2_name = st.selectbox("Player 2", player_names)
+            p2_kills = st.number_input("P2 Kills", min_value=0, step=1)
+            
+        if is_quads:
+            col3, col4 = st.columns(2)
+            with col3:
+                p3_name = st.selectbox("Player 3", player_names)
+                p3_kills = st.number_input("P3 Kills", min_value=0, step=1)
+            with col4:
+                p4_name = st.selectbox("Player 4", player_names)
+                p4_kills = st.number_input("P4 Kills", min_value=0, step=1)
+                
+        uploaded_file = st.file_uploader("📸 Upload Screenshot (Optional)", type=["png", "jpg", "jpeg"])
+                
+        submit_button = st.form_submit_button("Log Match")
+        
+        if submit_button:
+            if not p1_name:
+                st.error("You must select at least Player 1.")
+            else:
+                p1_id = roster_dict.get(p1_name, p1_name)
+                p2_id = roster_dict.get(p2_name, p2_name) if p2_name else ""
+                p3_id = roster_dict.get(p3_name, p3_name) if 'p3_name' in locals() and p3_name else ""
+                p4_id = roster_dict.get(p4_name, p4_name) if 'p4_name' in locals() and p4_name else ""
+
+                image_url = ""
+                if uploaded_file:
+                    discord_msg = f"**📝 NEW MATCH LOGGED**\n**Mode:** {selected_mode}\n**Ticket:** {st.session_state.ticket_number}\n**Game:** {game_num}\n**Placement:** {placement}\n**Submitted By:** {p1_name}"
+                    image_url = upload_to_discord(uploaded_file.getvalue(), uploaded_file.name, discord_msg)
+                    
+                target_sheet = spreadsheet.worksheet(raw_target_tab)
+                headers = target_sheet.row_values(1)
+                new_row = [""] * len(headers) 
+                
+                def safe_insert(col_name, value):
+                    if col_name in headers:
+                        new_row[headers.index(col_name)] = value
+                        
+                safe_insert("Ticket Number", st.session_state.ticket_number)
+                safe_insert(f"G{game_num} Placement", placement)
+                safe_insert(f"G{game_num} P1 Name", p1_id)
+                safe_insert(f"G{game_num} P1 Kills", p1_kills)
+                safe_insert(f"G{game_num} P2 Name", p2_id)
+                safe_insert(f"G{game_num} P2 Kills", p2_kills)
+                if is_quads:
+                    safe_insert(f"G{game_num} P3 Name", p3_id)
+                    safe_insert(f"G{game_num} P3 Kills", p3_kills)
+                    safe_insert(f"G{game_num} P4 Name", p4_id)
+                    safe_insert(f"G{game_num} P4 Kills", p4_kills)
+                
+                safe_insert("Screenshot Link", image_url if image_url else "No Image")
+
+                try:
+                    target_sheet.append_row(new_row)
+                    st.cache_data.clear()
+                    st.success(f"✅ Game {game_num} (Ticket {st.session_state.ticket_number}) logged successfully! Image sent to Discord: {'Yes' if image_url else 'No'}")
+                except Exception as e:
+                    st.error(f"Failed to submit match to sheet: {e}")
