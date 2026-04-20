@@ -10,8 +10,12 @@ import uuid
 # 1. Setup for Mobile
 st.set_page_config(page_title="League Hub", layout="centered", initial_sidebar_state="collapsed")
 
-# 2. The Sassy Greeting
-st.title("🏆 League Hub")
+# 2. The Sassy Greeting (Now with Main Logo)
+col1, col2, col3 = st.columns([1, 2, 1])
+with col2:
+    # IMPORTANT: Upload a file named "main_logo.png" to GitHub, or this will show a broken image icon
+    st.image("main_logo.png", use_container_width=True) 
+
 st.info("*Oh, look who decided to check their stats. Still 4th place? Groundbreaking.* — **Unpaid Intern**")
 
 # --- THE GAME MODE DICTIONARY ---
@@ -82,7 +86,33 @@ def get_lifetime_stats():
     except:
         return pd.DataFrame()
 
-# 6. Discord Webhook Logic
+# 5.6 Load The Prize Pool
+@st.cache_data(ttl=60)
+def get_prize_pool(target_column):
+    try:
+        sheet = spreadsheet.worksheet("Pot")
+        raw_data = sheet.get_all_values()
+        if not raw_data: return 0.0
+        
+        headers = raw_data[0]
+        if target_column in headers:
+            col_idx = headers.index(target_column)
+            col_vals = [row[col_idx] for row in raw_data[1:] if len(row) > col_idx]
+            
+            total_pot = 0.0
+            for val in col_vals:
+                try:
+                    clean_val = str(val).replace('$', '').replace(',', '').strip()
+                    if clean_val:
+                        total_pot += float(clean_val)
+                except:
+                    pass
+            return total_pot
+    except:
+        return 0.0
+    return 0.0
+
+# 6. Discord Webhook Logic 
 def upload_to_discord(file_bytes, filename, message):
     webhook_url = os.environ.get("DISCORD_WEBHOOK")
     if not webhook_url: return None
@@ -123,6 +153,7 @@ st.divider()
 # ==========================================
 if page == "🏆 Leaderboard":
     df = get_leaderboard(selected_mode)
+    pot_total = get_prize_pool(raw_target_tab)
 
     if not df.empty:
         name_cols = [col for col in df.columns if "Name" in col]
@@ -135,21 +166,38 @@ if page == "🏆 Leaderboard":
             top_squads.append("TBD")
             top_scores.append(0)
 
+        # Show the massive Prize Pool Banner
+        st.markdown(f"<h2 style='text-align: center; color: #FF8000;'>💰 Live Prize Pool: ${pot_total:,.2f}</h2>", unsafe_allow_html=True)
+        st.write("")
+
         st.subheader("🏁 Top 3 Podium")
         
         with st.container(border=True):
-            st.markdown("### 🥇 1st Place")
-            st.markdown(f"**{top_squads[0]}**")
-            st.success(f"🏆 {top_scores[0]} pts") 
+            logo_col, text_col = st.columns([1, 3], vertical_alignment="center")
+            with logo_col:
+                st.image("first_place.png", width=60) # Upload first_place.png to GitHub
+            with text_col:
+                st.markdown("### 1st Place")
+                st.markdown(f"**{top_squads[0]}**")
+            # 1st Place gets the money badge!
+            st.success(f"🏆 {top_scores[0]} pts  |  💰 Takes ${pot_total:,.2f}") 
 
         with st.container(border=True):
-            st.markdown("#### 🥈 2nd Place")
-            st.markdown(f"**{top_squads[1]}**")
+            logo_col, text_col = st.columns([1, 3], vertical_alignment="center")
+            with logo_col:
+                st.image("second_place.png", width=50) # Upload second_place.png to GitHub
+            with text_col:
+                st.markdown("#### 2nd Place")
+                st.markdown(f"**{top_squads[1]}**")
             st.info(f"⚡ {top_scores[1]} pts") 
 
         with st.container(border=True):
-            st.markdown("#### 🥉 3rd Place")
-            st.markdown(f"**{top_squads[2]}**")
+            logo_col, text_col = st.columns([1, 3], vertical_alignment="center")
+            with logo_col:
+                st.image("third_place.png", width=50) # Upload third_place.png to GitHub
+            with text_col:
+                st.markdown("#### 3rd Place")
+                st.markdown(f"**{top_squads[2]}**")
             st.warning(f"🔥 {top_scores[2]} pts") 
             
         st.divider()
@@ -179,7 +227,6 @@ elif page == "👑 Hall of Fame":
     lifetime_df = get_lifetime_stats()
 
     if not lifetime_df.empty and "Player Name" in lifetime_df.columns:
-        # Clean the data
         lifetime_df = lifetime_df[lifetime_df["Player Name"].str.strip() != ""]
 
         # --- 1. MODE-SPECIFIC LEADERBOARD ---
@@ -194,7 +241,6 @@ elif page == "👑 Hall of Fame":
             mode_df[mode_game_col] = pd.to_numeric(mode_df[mode_game_col], errors="coerce").fillna(0)
             mode_df[mode_kill_col] = pd.to_numeric(mode_df[mode_kill_col], errors="coerce").fillna(0)
             
-            # Filter players who actually played this mode
             mode_df = mode_df[mode_df[mode_game_col] > 0].copy()
             
             if not mode_df.empty:
