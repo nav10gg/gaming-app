@@ -74,7 +74,6 @@ def upload_to_discord(file_bytes, filename, message):
     webhook_url = os.environ.get("DISCORD_WEBHOOK")
     if not webhook_url: return None
     
-    # Adding ?wait=true forces Discord to send us back the permanent Image URL
     url = f"{webhook_url}?wait=true"
     payload = {"content": message}
     files = {"file": (filename, file_bytes)}
@@ -83,7 +82,7 @@ def upload_to_discord(file_bytes, filename, message):
         response = requests.post(url, data=payload, files=files)
         if response.status_code in [200, 201]:
             data = response.json()
-            return data["attachments"][0]["url"] # The permanent image link
+            return data["attachments"][0]["url"]
     except Exception as e:
         print(f"Webhook failed: {e}")
     return None
@@ -103,11 +102,45 @@ if not df.empty:
 
 st.divider()
 
-# --- THE ACTION PORTAL ---
+# --- CONSECUTIVE TICKET GENERATOR ---
 st.subheader(f"📝 Submit Match: {selected_mode}")
 
+# 1. If there isn't an active ticket, find the highest existing one in the sheet and add 1
+if 'ticket_number' not in st.session_state:
+    try:
+        target_sheet = spreadsheet.worksheet(raw_target_tab)
+        headers = target_sheet.row_values(1)
+        
+        if "Ticket Number" in headers:
+            # Find which column holds the Ticket Numbers
+            col_index = headers.index("Ticket Number") + 1
+            existing_tickets = target_sheet.col_values(col_index)[1:] # Skip the header
+            
+            ticket_nums = []
+            for t in existing_tickets:
+                try:
+                    ticket_nums.append(int(t))
+                except ValueError:
+                    pass # Ignore blanks or text
+                    
+            # Set the ticket to the highest number + 1 (Start at 100 if completely empty)
+            st.session_state.ticket_number = max(ticket_nums) + 1 if ticket_nums else 100
+        else:
+            st.session_state.ticket_number = 100
+            
+    except Exception as e:
+        st.session_state.ticket_number = 999 # Fallback if something goes wrong
+
+# 2. Display the Active Ticket
+st.info(f"🎫 **Active Ticket Number:** {st.session_state.ticket_number}")
+
+# 3. The reset button for when they finish a run
+if st.button("🔄 End Run & Start New Ticket"):
+    del st.session_state.ticket_number
+    st.rerun()
+
+# --- THE ACTION PORTAL ---
 with st.form("match_submission_form", clear_on_submit=True):
-    # Game-by-Game Logic
     col_g1, col_g2 = st.columns(2)
     with col_g1:
         game_num = st.selectbox("Game Number", [1, 2, 3, 4, 5, 6])
@@ -131,7 +164,6 @@ with st.form("match_submission_form", clear_on_submit=True):
             p4_name = st.selectbox("Player 4", player_names)
             p4_kills = st.number_input("P4 Kills", min_value=0, step=1)
             
-    # The Screenshot Uploader
     uploaded_file = st.file_uploader("📸 Upload Screenshot (Optional)", type=["png", "jpg", "jpeg"])
             
     submit_button = st.form_submit_button("Log Match")
@@ -145,23 +177,22 @@ with st.form("match_submission_form", clear_on_submit=True):
             p3_id = roster_dict.get(p3_name, p3_name) if 'p3_name' in locals() and p3_name else ""
             p4_id = roster_dict.get(p4_name, p4_name) if 'p4_name' in locals() and p4_name else ""
 
-            # 1. Handle Screenshot Upload
             image_url = ""
             if uploaded_file:
-                discord_msg = f"**📝 NEW MATCH LOGGED**\n**Mode:** {selected_mode}\n**Game:** {game_num}\n**Placement:** {placement}\n**Submitted By:** {p1_name}"
+                discord_msg = f"**📝 NEW MATCH LOGGED**\n**Mode:** {selected_mode}\n**Ticket:** {st.session_state.ticket_number}\n**Game:** {game_num}\n**Placement:** {placement}\n**Submitted By:** {p1_name}"
                 image_url = upload_to_discord(uploaded_file.getvalue(), uploaded_file.name, discord_msg)
                 
-            # 2. Smart Array Insertion to Google Sheets
             target_sheet = spreadsheet.worksheet(raw_target_tab)
             headers = target_sheet.row_values(1)
-            new_row = [""] * len(headers) # Create a blank row exactly the width of your sheet
+            new_row = [""] * len(headers) 
             
-            # Helper function to place data exactly where it belongs
             def safe_insert(col_name, value):
                 if col_name in headers:
                     new_row[headers.index(col_name)] = value
                     
-            # Insert the dynamic game data
+            # Inject the current consecutive ticket number
+            safe_insert("Ticket Number", st.session_state.ticket_number)
+            
             safe_insert(f"G{game_num} Placement", placement)
             safe_insert(f"G{game_num} P1 Name", p1_id)
             safe_insert(f"G{game_num} P1 Kills", p1_kills)
@@ -173,12 +204,11 @@ with st.form("match_submission_form", clear_on_submit=True):
                 safe_insert(f"G{game_num} P4 Name", p4_id)
                 safe_insert(f"G{game_num} P4 Kills", p4_kills)
             
-            # If you add a "Screenshot Link" column to your sheet, this will drop the URL in!
             safe_insert("Screenshot Link", image_url if image_url else "No Image")
 
             try:
                 target_sheet.append_row(new_row)
                 st.cache_data.clear()
-                st.success(f"✅ Game {game_num} logged successfully! Image sent to Discord: {'Yes' if image_url else 'No'}")
+                st.success(f"✅ Game {game_num} (Ticket {st.session_state.ticket_number}) logged successfully! Image sent to Discord: {'Yes' if image_url else 'No'}")
             except Exception as e:
                 st.error(f"Failed to submit match to sheet: {e}")
