@@ -56,7 +56,7 @@ def get_leaderboard(tab_name):
         columns_to_keep = ["Total Score", "P1 Name", "P1 Kills", "P2 Name", "P2 Kills"]
         
         if GAME_MODES[tab_name]["is_quads"]:
-            columns_to_keep.extend(["P3 Name", "P3 Kills", "P4 Names", "P4 Kills"]) 
+            columns_to_keep.extend(["P3 Name", "P3 Kills", "P4 Name", "P4 Kills"]) 
             
         safe_columns = [col for col in columns_to_keep if col in df.columns]
         df = df[safe_columns]
