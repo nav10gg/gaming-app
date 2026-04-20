@@ -113,15 +113,26 @@ if not df.empty:
         top_squads.append("TBD")
         top_scores.append(0)
 
-    # --- THE PODIUM ---
+    # --- THE PODIUM (MOBILE OPTIMIZED CARDS) ---
     st.subheader("🏁 Top 3 Podium")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric(label="🥇 1st Place", value=top_squads[0], delta=f"{top_scores[0]} pts")
-    with col2:
-        st.metric(label="🥈 2nd Place", value=top_squads[1], delta=f"{top_scores[1]} pts")
-    with col3:
-        st.metric(label="🥉 3rd Place", value=top_squads[2], delta=f"{top_scores[2]} pts")
+    
+    # 1st Place Card
+    with st.container(border=True):
+        st.markdown("### 🥇 1st Place")
+        st.markdown(f"**{top_squads[0]}**")
+        st.success(f"🏆 {top_scores[0]} pts") # Green accent
+
+    # 2nd Place Card
+    with st.container(border=True):
+        st.markdown("#### 🥈 2nd Place")
+        st.markdown(f"**{top_squads[1]}**")
+        st.info(f"⚡ {top_scores[1]} pts") # Blue accent
+
+    # 3rd Place Card
+    with st.container(border=True):
+        st.markdown("#### 🥉 3rd Place")
+        st.markdown(f"**{top_squads[2]}**")
+        st.warning(f"🔥 {top_scores[2]} pts") # Orange/Bronze accent
         
     st.divider()
 
@@ -140,7 +151,7 @@ if not df.empty:
             width="stretch",
             hide_index=True,
             column_config={
-                "Squad": st.column_config.TextColumn("Squad Roster"),
+                "Squad": st.column_config.TextColumn("Squad Roster", width="large"), # Forces wider column
                 "Total Score": st.column_config.ProgressColumn(
                     "Score",
                     format="%f",
