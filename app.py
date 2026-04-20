@@ -98,45 +98,90 @@ roster_dict = get_roster()
 player_names = [""] + list(roster_dict.keys()) 
 
 df = get_leaderboard(selected_mode)
+
 if not df.empty:
-    # UPDATED LINE BELOW (use_container_width is now width="stretch")
-    st.dataframe(df, width="stretch", hide_index=True)
+    # --- DATA PROCESSING FOR TEAMS ---
+    # Combine individual player names into a single "Squad" string
+    name_cols = [col for col in df.columns if "Name" in col]
+    df["Squad"] = df[name_cols].apply(lambda row: " • ".join([str(val) for val in row if pd.notna(val) and str(val).strip() != ""]), axis=1)
+    
+    top_squads = df["Squad"].tolist()
+    top_scores = df["Total Score"].tolist()
+    
+    # Pad the list in case there are fewer than 3 teams logged
+    while len(top_squads) < 3:
+        top_squads.append("TBD")
+        top_scores.append(0)
+
+    # --- THE PODIUM ---
+    st.subheader("🏁 Top 3 Podium")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric(label="🥇 1st Place", value=top_squads[0], delta=f"{top_scores[0]} pts")
+    with col2:
+        st.metric(label="🥈 2nd Place", value=top_squads[1], delta=f"{top_scores[1]} pts")
+    with col3:
+        st.metric(label="🥉 3rd Place", value=top_squads[2], delta=f"{top_scores[2]} pts")
+        
+    st.divider()
+
+    # --- THE CONTENDERS TABLE ---
+    st.subheader("📊 The Contenders")
+    if len(df) > 3:
+        # Slice the dataframe to only show 4th place and below
+        contenders_df = df.iloc[3:].copy()
+        display_df = contenders_df[["Squad", "Total Score"]]
+        
+        # Find the highest overall score so the progress bars scale correctly
+        max_score = df["Total Score"].max()
+        
+        st.dataframe(
+            display_df,
+            width="stretch",
+            hide_index=True,
+            column_config={
+                "Squad": st.column_config.TextColumn("Squad Roster"),
+                "Total Score": st.column_config.ProgressColumn(
+                    "Score",
+                    format="%f",
+                    min_value=0,
+                    max_value=int(max_score) if pd.notna(max_score) else 5000,
+                ),
+            }
+        )
+    else:
+        st.info("Not enough teams to fill the Contenders bracket yet. Log some matches!")
 
 st.divider()
 
 # --- CONSECUTIVE TICKET GENERATOR ---
 st.subheader(f"📝 Submit Match: {selected_mode}")
 
-# 1. If there isn't an active ticket, find the highest existing one in the sheet and add 1
 if 'ticket_number' not in st.session_state:
     try:
         target_sheet = spreadsheet.worksheet(raw_target_tab)
         headers = target_sheet.row_values(1)
         
         if "Ticket Number" in headers:
-            # Find which column holds the Ticket Numbers
             col_index = headers.index("Ticket Number") + 1
-            existing_tickets = target_sheet.col_values(col_index)[1:] # Skip the header
+            existing_tickets = target_sheet.col_values(col_index)[1:] 
             
             ticket_nums = []
             for t in existing_tickets:
                 try:
-                    ticket_nums.append(int(str(t).split('-')[0])) # Grab just the number part
+                    ticket_nums.append(int(str(t).split('-')[0])) 
                 except ValueError:
-                    pass # Ignore blanks or text
+                    pass 
                     
-            # Generate a Hybrid Ticket: Consecutive Number + 3 Random Letters
             next_num = max(ticket_nums) + 1 if ticket_nums else 100
             random_suffix = str(uuid.uuid4())[:3].upper()
             st.session_state.ticket_number = f"{next_num}-{random_suffix}"
             
     except Exception as e:
-        st.session_state.ticket_number = 999 # Fallback if something goes wrong
+        st.session_state.ticket_number = 999 
 
-# 2. Display the Active Ticket
 st.info(f"🎫 **Active Ticket Number:** {st.session_state.ticket_number}")
 
-# 3. The reset button for when they finish a run
 if st.button("🔄 End Run & Start New Ticket"):
     del st.session_state.ticket_number
     st.rerun()
@@ -192,9 +237,7 @@ with st.form("match_submission_form", clear_on_submit=True):
                 if col_name in headers:
                     new_row[headers.index(col_name)] = value
                     
-            # Inject the current consecutive ticket number
             safe_insert("Ticket Number", st.session_state.ticket_number)
-            
             safe_insert(f"G{game_num} Placement", placement)
             safe_insert(f"G{game_num} P1 Name", p1_id)
             safe_insert(f"G{game_num} P1 Kills", p1_kills)
