@@ -10,7 +10,7 @@ import uuid
 # 1. Setup for Mobile
 st.set_page_config(page_title="League Hub", layout="centered", initial_sidebar_state="collapsed")
 
-# 2. The Sassy Greeting (Now Bulletproof)
+# 2. The Sassy Greeting
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
     if os.path.exists("main_logo.png"):
@@ -168,7 +168,6 @@ if page == "🏆 Leaderboard":
             top_squads.append("TBD")
             top_scores.append(0)
 
-        # Show the massive Prize Pool Banner
         st.markdown(f"<h2 style='text-align: center; color: #FF8000;'>💰 Live Prize Pool: ${pot_total:,.2f}</h2>", unsafe_allow_html=True)
         st.write("")
 
@@ -224,8 +223,8 @@ if page == "🏆 Leaderboard":
                     score = float(row['Total Score']) if pd.notna(row['Total Score']) else 0.0
                     progress_pct = min(score / max_score, 1.0) if score > 0 else 0.0
                     
-                    st.markdown(f"**{squad}**")
-                    st.progress(progress_pct, text=f"{score} pts")
+                    st.markdown(f"**{squad}** &nbsp;—&nbsp; <span style='color: #FF8000; font-size: 1.1em; font-weight: 800;'>{score} pts</span>", unsafe_allow_html=True)
+                    st.progress(progress_pct)
                     st.write("") 
         else:
             st.info("Not enough teams to fill the Contenders bracket yet. Log some matches!")
@@ -239,7 +238,6 @@ elif page == "👑 Hall of Fame":
     if not lifetime_df.empty and "Player Name" in lifetime_df.columns:
         lifetime_df = lifetime_df[lifetime_df["Player Name"].str.strip() != ""]
 
-        # --- 1. MODE-SPECIFIC LEADERBOARD ---
         st.subheader(f"👑 {selected_mode} Legends")
         
         prefix = GAME_MODES[selected_mode]["raw_tab"]
@@ -286,7 +284,6 @@ elif page == "👑 Hall of Fame":
 
         st.divider()
 
-        # --- 2. ALL-TIME OVERALL STATS ---
         st.subheader("♾️ All-Time Lifetime Legends")
         
         kill_cols = [col for col in lifetime_df.columns if "Kills" in col]
@@ -330,9 +327,73 @@ elif page == "👑 Hall of Fame":
         st.warning("Could not load the 'Lifetime Stats' tab or find the 'Player Name' column.")
 
 # ==========================================
-# PAGE 3: SUBMIT MATCH 
+# PAGE 3: SUBMIT MATCH & PACE TRACKER
 # ==========================================
 elif page == "📝 Submit Match":
+    
+    # --- PACE TRACKER LOGIC ---
+    df_current = get_leaderboard(selected_mode)
+    default_target = 130.0
+    if not df_current.empty and "Total Score" in df_current.columns:
+        default_target = float(df_current["Total Score"].max())
+        if pd.isna(default_target): default_target = 130.0
+
+    with st.expander("🎯 Live Pace Tracker", expanded=False):
+        st.markdown("<p style='font-size: 0.9em; color: gray;'>Enter your current points and remaining maps to see what you need to steal 1st place.</p>", unsafe_allow_html=True)
+        col_t1, col_t2, col_t3, col_t4 = st.columns(4)
+        with col_t1:
+            target_score = st.number_input("Target Score", value=default_target, step=1.0)
+        with col_t2:
+            current_score = st.number_input("Current Run Score", value=0.0, step=1.0)
+        with col_t3:
+            games_played = st.number_input("Maps Counted", min_value=0, max_value=4, value=0)
+        with col_t4:
+            team_divider = st.number_input("Team Divisor", value=3.6, step=0.1)
+
+        maps_remaining = 5 - games_played
+        points_needed = target_score - current_score
+
+        if points_needed <= 0:
+            st.success("🎉 You're already hitting the target pace!")
+        else:
+            points_per_map = points_needed / maps_remaining
+            st.markdown(f"**Need:** {points_needed:.2f} pts | **Pace:** {points_per_map:.2f} pts/map")
+
+            # The exact reverse-engineering math algorithm for YOUR league
+            def calculate_kills_needed(target_map_points, placement, divider):
+                p_pts = {"1st": 20, "2nd": 10, "3rd": 9, "4th": 8, "5th": 7, "6+": 0}[placement]
+                
+                # Test every possible kill count instantly to find the exact target
+                for k in range(0, 200):
+                    bonus = 0
+                    if placement == "1st":
+                        if k >= 70: bonus = 25
+                        elif k >= 60: bonus = 20
+                        elif k >= 50: bonus = 15
+                        elif k >= 40: bonus = 10
+                        elif k >= 30: bonus = 5
+                    
+                    map_total = (k + p_pts + bonus) / divider
+                    if map_total >= target_map_points:
+                        return k
+                return "150+" 
+
+            placements = ["1st", "2nd", "3rd", "4th", "5th", "6+"]
+            kills_data = [{"Placement": p, "Kills Needed": calculate_kills_needed(points_per_map, p, team_divider)} for p in placements]
+            pace_df = pd.DataFrame(kills_data)
+
+            st.dataframe(
+                pace_df,
+                width="stretch",
+                hide_index=True,
+                column_config={
+                    "Placement": st.column_config.TextColumn("Placement"),
+                    "Kills Needed": st.column_config.NumberColumn("Kills Required")
+                }
+            )
+
+    st.divider()
+
     st.subheader(f"📝 Submit Match: {selected_mode}")
 
     if 'ticket_number' not in st.session_state:
