@@ -116,7 +116,7 @@ def get_prize_pool(target_column):
 
 # 6. Discord Webhook Logic 
 def upload_to_discord(file_bytes, filename, message):
-    # Change this line to look for the new LOGS variable
+    # This looks for the LOGS variable for standard match submissions
     webhook_url = os.environ.get("DISCORD_WEBHOOK_LOGS") 
     if not webhook_url: return None
     
@@ -139,7 +139,8 @@ def upload_to_discord(file_bytes, filename, message):
 # --- APP INTERFACE & NAVIGATION ROUTING ---
 # ==========================================
 
-page = st.radio("Navigation", ["🏆 Leaderboard", "👑 Hall of Fame", "📝 Submit Match"], horizontal=True, label_visibility="collapsed")
+# Added "🔒 Admin" to the navigation options
+page = st.radio("Navigation", ["🏆 Leaderboard", "👑 Hall of Fame", "📝 Submit Match", "🔒 Admin"], horizontal=True, label_visibility="collapsed")
 st.divider()
 
 selected_mode = st.selectbox("🎮 Select Game Mode", list(GAME_MODES.keys()))
@@ -531,3 +532,60 @@ elif page == "📝 Submit Match":
                     
                 except Exception as e:
                     st.error(f"Failed to submit match to sheet: {e}")
+
+# ==========================================
+# PAGE 4: ADMIN PANEL (SECRET)
+# ==========================================
+elif page == "🔒 Admin":
+    st.subheader("🔒 Commissioner Access")
+    
+    # Simple password protection
+    admin_password = st.text_input("Enter Commissioner Password", type="password")
+    
+    if admin_password == "nav102516": # Change this to your actual secret password!
+        st.success("Access Granted.")
+        
+        st.markdown("### 🚨 End of Season Controls 🚨")
+        st.warning(f"**Target Mode:** {selected_mode} \n\nClicking the button below will instantly grab the current 1st Place team for this mode, calculate the final pot, and blast the championship banner to the Discord Announcement channel.")
+        
+        if st.button("🔥 FIRE CHAMPIONSHIP ANNOUNCEMENT 🔥", type="primary"):
+            with st.spinner("Calculating final stats and contacting Discord..."):
+                try:
+                    admin_df = get_leaderboard(selected_mode)
+                    pot_total = get_prize_pool(raw_target_tab)
+                    
+                    if not admin_df.empty:
+                        # Grab 1st place
+                        winning_row = admin_df.iloc[0]
+                        winning_score = winning_row["Total Score"]
+                        
+                        name_cols = [col for col in admin_df.columns if "Name" in col]
+                        winning_squad = " • ".join([str(val) for val in winning_row[name_cols] if pd.notna(val) and str(val).strip() != ""])
+                        
+                        # Build the Embed and Fire to Discord
+                        webhook_url = os.environ.get("DISCORD_WEBHOOK_ANNOUNCE")
+                        if not webhook_url:
+                            st.error("Error: Could not find the DISCORD_WEBHOOK_ANNOUNCE variable in Railway. Did you add it to the Variables tab?")
+                        else:
+                            embed = {
+                                "title": "🚨 TOURNAMENT CONCLUDED 🚨",
+                                "description": f"The **{selected_mode}** season has officially ended. The stats have been locked, the logs have been verified, and the champions have been crowned.",
+                                "color": 16744448, 
+                                "fields": [
+                                    {"name": "🥇 1ST PLACE CHAMPIONS", "value": f"**{winning_squad}**", "inline": False},
+                                    {"name": "🔥 Final Score", "value": f"{winning_score} pts", "inline": True},
+                                    {"name": "💰 Total Payout", "value": f"${pot_total:,.2f}", "inline": True}
+                                ],
+                                "footer": {"text": "Check the League Hub app for the full Hall of Fame breakdown."}
+                            }
+                            
+                            response = requests.post(webhook_url, json={"embeds": [embed]})
+                            if response.status_code in [200, 204]:
+                                st.balloons()
+                                st.success("✅ Championship Banner successfully fired to Discord!")
+                            else:
+                                st.error(f"❌ Discord rejected the message: {response.status_code}")
+                    else:
+                        st.error("Could not find any teams on the leaderboard to announce.")
+                except Exception as e:
+                    st.error(f"Critical Error: {e}")
