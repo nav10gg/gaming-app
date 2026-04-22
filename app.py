@@ -116,7 +116,8 @@ def get_prize_pool(target_column):
 
 # 6. Discord Webhook Logic 
 def upload_to_discord(file_bytes, filename, message):
-    webhook_url = os.environ.get("DISCORD_WEBHOOK")
+    # Change this line to look for the new LOGS variable
+    webhook_url = os.environ.get("DISCORD_WEBHOOK_LOGS") 
     if not webhook_url: return None
     
     url = f"{webhook_url}?wait=true"
