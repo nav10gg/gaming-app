@@ -240,6 +240,7 @@ elif page == "👑 Hall of Fame":
     if not lifetime_df.empty and "Player Name" in lifetime_df.columns:
         lifetime_df = lifetime_df[lifetime_df["Player Name"].str.strip() != ""]
 
+        # --- 1. MODE-SPECIFIC LEADERBOARD ---
         st.subheader(f"👑 {selected_mode} Legends")
         
         prefix = GAME_MODES[selected_mode]["raw_tab"]
@@ -286,8 +287,7 @@ elif page == "👑 Hall of Fame":
 
         st.divider()
 
-        st.subheader("♾️ All-Time Lifetime Legends")
-        
+        # --- Base Math for All-Time Calculations ---
         kill_cols = [col for col in lifetime_df.columns if "Kills" in col]
         game_cols = [col for col in lifetime_df.columns if "Games" in col]
 
@@ -297,18 +297,20 @@ elif page == "👑 Hall of Fame":
 
         all_time_df["Total Games"] = all_time_df[game_cols].sum(axis=1)
         all_time_df["Total Kills"] = all_time_df[kill_cols].sum(axis=1)
-        
         all_time_df = all_time_df[all_time_df["Total Games"] > 0].copy()
         
         if not all_time_df.empty:
             all_time_df["Avg Kills/Game"] = all_time_df["Total Kills"] / all_time_df["Total Games"]
-            all_time_df = all_time_df.sort_values(by="Avg Kills/Game", ascending=False)
             
-            final_board = all_time_df[["Player Name", "Total Games", "Total Kills", "Avg Kills/Game"]]
-            max_avg = float(final_board["Avg Kills/Game"].max())
+            # --- 2. ALL-TIME HIGHEST AVERAGE ---
+            st.subheader("♾️ All-Time Lifetime Legends (Highest Avg)")
+            
+            avg_df = all_time_df.sort_values(by="Avg Kills/Game", ascending=False)
+            final_avg_board = avg_df[["Player Name", "Total Games", "Total Kills", "Avg Kills/Game"]]
+            max_avg = float(final_avg_board["Avg Kills/Game"].max())
             
             st.dataframe(
-                final_board,
+                final_avg_board,
                 width="stretch",
                 hide_index=True,
                 column_config={
@@ -321,6 +323,31 @@ elif page == "👑 Hall of Fame":
                         min_value=0,
                         max_value=max_avg,
                     )
+                }
+            )
+
+            st.divider()
+
+            # --- 3. ALL-TIME MOST KILLS (THE GRINDERS) ---
+            st.subheader("💀 Apex Predators (Most Total Kills)")
+            
+            kills_df = all_time_df.sort_values(by="Total Kills", ascending=False)
+            final_kills_board = kills_df[["Player Name", "Total Kills", "Total Games"]]
+            max_total_kills = float(final_kills_board["Total Kills"].max())
+            
+            st.dataframe(
+                final_kills_board,
+                width="stretch",
+                hide_index=True,
+                column_config={
+                    "Player Name": st.column_config.TextColumn("Legend", width="medium"),
+                    "Total Kills": st.column_config.ProgressColumn(
+                        "Absolute Total Kills",
+                        format="%d",
+                        min_value=0,
+                        max_value=max_total_kills,
+                    ),
+                    "Total Games": st.column_config.NumberColumn("Total Matches", format="%d")
                 }
             )
         else:
@@ -542,7 +569,7 @@ elif page == "🔒 Admin":
     # Simple password protection
     admin_password = st.text_input("Enter Commissioner Password", type="password")
     
-    if admin_password == "nav102516": # Change this to your actual secret password!
+    if admin_password == "nav102516": # Your custom password
         st.success("Access Granted.")
         
         st.markdown("### 🚨 End of Season Controls 🚨")
