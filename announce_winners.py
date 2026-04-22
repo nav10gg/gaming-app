@@ -51,7 +51,8 @@ def get_winner_data():
     return winning_squad, winning_score, total_pot
 
 def send_discord_announcement(squad, score, pot):
-    webhook_url = os.environ.get("DISCORD_WEBHOOK")
+    # Change this line to look for the new ANNOUNCE variable
+    webhook_url = os.environ.get("DISCORD_WEBHOOK_ANNOUNCE")
     if not webhook_url:
         print("Error: No Discord Webhook found.")
         return
