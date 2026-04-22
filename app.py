@@ -24,7 +24,7 @@ st.info("*Oh, look who decided to check their stats. Still 4th place? Groundbrea
 GAME_MODES = {
     "Ranked Resurgence": {"raw_tab": "Resurgence", "is_quads": True},
     "Ranked WZ Quads": {"raw_tab": "WZ Quads", "is_quads": True},
-    "Ranked Avalon Quads": {"raw_tab": "Avalon Quads", "is_quads": True},
+    "Ranked Black Ops Royale": {"raw_tab": "Black Ops Royale", "is_quads": True},
     "Ranked Duo Low": {"raw_tab": "Duo Low", "is_quads": False},
     "Ranked Duo High": {"raw_tab": "Duo High", "is_quads": False}
 }
